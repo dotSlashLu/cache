@@ -1,4 +1,4 @@
-A simple internal k-v store with the ability to expire a key
+A simple thread-safe internal k-v store with the ability to expire a key.
 
 ## SYNOPSIS
 ```
