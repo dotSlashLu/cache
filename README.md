@@ -2,31 +2,43 @@ A simple thread-safe internal k-v store with the ability to expire a key.
 
 ## SYNOPSIS
 ```
-type DB struct {
+package cache
+    import "github.com/dotSlashLu/cache"
+
+    A simple internal k-v store with the ability to expire a key
+
+TYPES
+
+type Cache struct {
     // contains filtered or unexported fields
 }
 
-func New() (db *DB)
+func New() (c *Cache)
     Create a new DB
 
-func (db *DB) Close()
+func (c *Cache) Close()
     Unset DB After this call, all methods will be invalid
 
-func (db *DB) Del(k string)
+func (c *Cache) Del(k string)
     Delete k from db
 
-func (db *DB) Exists(k string) bool
+func (c *Cache) Exists(k string) bool
     Test if k exists in db
 
-func (db *DB) Flush()
-    Flush all keys
+func (c *Cache) Flush()
+    Flush all keys * design considerations:
 
-func (db *DB) Get(k string) interface{}
+        best effort is made to reduce the gc cycle by manually close all the keys
+        that are going to be deleted or replaced but doing a loop or making a
+        storage for stopping all the timers are not worth the gain so they are
+        spared when flushing
+
+func (c *Cache) Get(k string) interface{}
     Get value from k return nil if the key is not set
 
-func (db *DB) Keys() (keys []string)
+func (c *Cache) Keys() (keys []string)
     Return all keys *unsorted*
 
-func (db *DB) Set(k string, v interface{}, ttl ...int64)
+func (c *Cache) Set(k string, v interface{}, ttl ...int64)
     Set k with v with an optional ttl in seconds
 ```
