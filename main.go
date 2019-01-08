@@ -30,11 +30,10 @@ func (db *DB) Set(k string, v interface{}, ttl ...int64) {
 	defer db.lock.Unlock()
 	db.db[k] = v
 	if len(ttl) == 1 {
-		c := time.Tick(time.Duration(ttl[0]) * time.Second)
-		go func() {
-			<-c
+		d := time.Duration(ttl[0]) * time.Second
+		time.AfterFunc(d, func() {
 			db.Del(k)
-		}()
+		})
 	}
 }
 
