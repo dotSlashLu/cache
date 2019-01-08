@@ -6,66 +6,125 @@ import (
 	"time"
 )
 
-type DB struct {
-	lock *sync.Mutex
-	db   map[string]interface{}
+type dbEntry struct {
+	value interface{}
+	timer *time.Timer
+}
+
+func (e *dbEntry) getValue() interface{} {
+	return e.value
+}
+
+// stop timer for faster gc
+//	https://golang.org/pkg/time/#After
+func (e *dbEntry) stopTimer() {
+	if e.timer == nil {
+		return
+	}
+	e.timer.Stop()
+}
+
+type Cache struct {
+	// an RWMutex will be good since we don't want to block concurrent read
+	l  *sync.RWMutex
+	db map[string]*dbEntry
 }
 
 // Create a new DB
-func New() (db *DB) {
-	db = new(DB)
-	db.lock = new(sync.Mutex)
-	db.db = make(map[string]interface{})
-	return db
-}
-
-// Delete k from db
-func (db *DB) Del(k string) {
-	delete(db.db, k)
+func New() (c *Cache) {
+	c = new(Cache)
+	c.l = new(sync.RWMutex)
+	c.db = make(map[string]*dbEntry)
+	return c
 }
 
 // Set k with v with an optional ttl in seconds
-func (db *DB) Set(k string, v interface{}, ttl ...int64) {
-	db.lock.Lock()
-	defer db.lock.Unlock()
-	db.db[k] = v
+func (c *Cache) Set(k string, v interface{}, ttl ...int64) {
+	c.lock()
+	defer c.unlock()
+	e := c.getEntry(k)
+	if e == nil {
+		e = new(dbEntry)
+	} else {
+		e.stopTimer()
+	}
+	e.value = v
+
 	if len(ttl) == 1 {
 		d := time.Duration(ttl[0]) * time.Second
-		time.AfterFunc(d, func() {
-			db.Del(k)
+		e.timer = time.AfterFunc(d, func() {
+			c.Del(k)
 		})
 	}
+	c.db[k] = e
+}
+
+func (c *Cache) getEntry(k string) *dbEntry {
+	return c.db[k]
+}
+
+func (c *Cache) lock() {
+	c.l.Lock()
+}
+
+func (c *Cache) unlock() {
+	c.l.Unlock()
 }
 
 // Get value from k
 // return nil if the key is not set
-func (db *DB) Get(k string) interface{} {
-	v := db.db[k]
-	return v
+func (c *Cache) Get(k string) interface{} {
+	c.lock()
+	defer c.unlock()
+	e := c.getEntry(k)
+	if e == nil {
+		return nil
+	}
+	return e.getValue()
+}
+
+// Delete k from db
+func (c *Cache) Del(k string) {
+	c.lock()
+	defer c.unlock()
+	e := c.getEntry(k)
+	if e == nil {
+		return
+	}
+	e.stopTimer()
+	delete(c.db, k)
 }
 
 // Return all keys *unsorted*
-func (db *DB) Keys() (keys []string) {
-	keys = make([]string, 0, len(db.db))
-	for k := range db.db {
+func (c *Cache) Keys() (keys []string) {
+	db := c.db
+	keys = make([]string, 0, len(db))
+	for k := range db {
 		keys = append(keys, k)
 	}
 	return keys
 }
 
 // Test if k exists in db
-func (db *DB) Exists(k string) bool {
-	_, exists := db.db[k]
+func (c *Cache) Exists(k string) bool {
+	c.lock()
+	defer c.unlock()
+	_, exists := c.db[k]
 	return exists
 }
 
 // Flush all keys
-func (db *DB) Flush() {
-	db.db = make(map[string]interface{})
+// * design considerations:
+//	best effort is made to reduce the gc cycle by manually close all the keys
+//	that are going to be deleted or replaced but doing a loop or making a
+// 	storage for stopping all the timers are not worth the gain so they are
+//	spared when flushing
+func (c *Cache) Flush() {
+	c.db = make(map[string]*dbEntry)
 }
 
 // Unset DB
 // After this call, all methods will be invalid
-func (db *DB) Close() {
-	db.db = nil
+func (c *Cache) Close() {
+	c.db = nil
 }
