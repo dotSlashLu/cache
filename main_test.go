@@ -62,6 +62,69 @@ func TestSet(t *testing.T) {
 	assert.Equal(nil, db.Get(k2), desc)
 }
 
+func BenchmarkNew(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		New()
+	}
+}
+
+func BenchmarkSet(b *testing.B) {
+	c := New()
+	i := 0
+
+	m := make(map[string]interface{})
+	b.Run("bare map set", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			m["k"] = "v"
+		}
+	})
+
+	b.Run("override no ttl", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			c.Set("k", "v")
+		}
+	})
+
+	b.Run("override with ttl", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			c.Set("k", "v", 10)
+		}
+	})
+
+	b.Run("no ttl", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			// c.Set("k"+strconv.Itoa(i), "v")
+			c.Set(fmt.Sprintf("k%d", i), "v")
+		}
+	})
+
+	b.Run("with ttl", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			c.Set(fmt.Sprintf("k%d", i), "v")
+			// c.Set("k"+strconv.Itoa(i), "v", 10)
+		}
+	})
+
+	fmt.Println("bare map set AllocsPerRun:", testing.AllocsPerRun(1000000, func() {
+		m[fmt.Sprintf("k%d", i)] = "v"
+		i += 1
+	}))
+	fmt.Println("override no ttl AllocsPerRun:", testing.AllocsPerRun(1000000, func() {
+		c.Set("k", "v")
+	}))
+	fmt.Println("override with ttl AllocsPerRun:", testing.AllocsPerRun(1000000, func() {
+		c.Set("k", "v", 10)
+	}))
+	fmt.Println("no ttl AllocsPerRun:", testing.AllocsPerRun(1000000, func() {
+		c.Set(fmt.Sprintf("k%d", i), "v")
+		i += 1
+	}))
+	fmt.Println("with ttl AllocsPerRun:", testing.AllocsPerRun(1000000, func() {
+		c.Set(fmt.Sprintf("k%d", i), "v", 10)
+		i += 1
+	}))
+}
+
 func TestGet(t *testing.T) {
 	db := New()
 	v := db.Get("asdf")
@@ -71,11 +134,49 @@ func TestGet(t *testing.T) {
 	assert.Equal(t, nil, v, desc)
 }
 
+func BenchmarkGet(b *testing.B) {
+	m := make(map[string]interface{})
+	m["a"] = 1
+	b.Run("bare map get", func(b *testing.B) {
+		for i := 0; i <= b.N; i++ {
+			_ = m["a"]
+		}
+	})
+
+	c := New()
+	c.Set("k", "v")
+	b.Run("cache get", func(b *testing.B) {
+		for i := 0; i <= b.N; i++ {
+			c.Get("k")
+		}
+	})
+}
+
 func TestDel(t *testing.T) {
 	db := New()
 	desc := "del non-existing key should not panic"
 	db.Del("asdf")
 	fmt.Println(desc)
+
+	desc = "key should be deleted"
+	fmt.Println(desc)
+	k := "asdf"
+	db.Set(k, 1)
+	assert.Equal(t, true, db.Exists(k), "key should exist")
+	db.Del(k)
+	assert.Equal(t, false, db.Exists(k), "key should not exist")
+}
+
+func BenchmarkDel(b *testing.B) {
+	c := New()
+	for i := 0; i <= b.N; i++ {
+		c.Set(fmt.Sprintf("%d", i), i)
+	}
+	b.ResetTimer()
+
+	for i := 0; i <= b.N; i++ {
+		c.Del(fmt.Sprintf("%d", i))
+	}
 }
 
 func TestKeys(t *testing.T) {
@@ -120,7 +221,7 @@ func TestFlush(t *testing.T) {
 func ExampleCache_Set() {
 	k := "a"
 	v := "b"
-	ttl := 10
+	ttl := int64(10)
 	c := New()
 	// set cache with a ttl
 	c.Set(k, v, ttl)
