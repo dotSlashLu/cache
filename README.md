@@ -1,5 +1,17 @@
 A simple thread-safe internal k-v store with the ability to expire a key.
 
+[![GoDoc](https://godoc.org/github.com/dotSlashLu/cache?status.svg)](https://godoc.org/github.com/dotSlashLu/cache)
+
+## EXAMPLES
+```go
+c := New()
+// set cache with a ttl
+c.Set("k", 1, 10)
+		                     
+// set cache with no ttl
+c.Set("k1", "v1")
+```
+
 ## SYNOPSIS
 ```
 package cache
@@ -26,7 +38,9 @@ func (c *Cache) Exists(k string) bool
     Test if k exists in db
 
 func (c *Cache) Flush()
-    Flush all keys * design considerations:
+    Flush all keys 
+    
+        * design considerations:
 
         best effort is made to reduce the gc cycle by manually close all the keys
         that are going to be deleted or replaced but doing a loop or making a

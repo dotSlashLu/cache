@@ -116,3 +116,15 @@ func TestFlush(t *testing.T) {
 	db.Flush()
 	assert.Equal(t, []string{}, db.Keys(), desc)
 }
+
+func ExampleCache_Set() {
+	k := "a"
+	v := "b"
+	ttl := 10
+	c := New()
+	// set cache with a ttl
+	c.Set(k, v, ttl)
+
+	// set cache without a ttl
+	c.Set("k1", "v1")
+}

@@ -114,6 +114,7 @@ func (c *Cache) Exists(k string) bool {
 }
 
 // Flush all keys
+//
 // * design considerations:
 //	best effort is made to reduce the gc cycle by manually close all the keys
 //	that are going to be deleted or replaced but doing a loop or making a
